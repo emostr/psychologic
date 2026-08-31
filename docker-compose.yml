@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-psychologic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-psychologic}
+      POSTGRES_DB: ${POSTGRES_DB:-psychologic}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-psychologic} -d ${POSTGRES_DB:-psychologic}']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-psychologic}:${POSTGRES_PASSWORD:-psychologic}@postgres:5432/${POSTGRES_DB:-psychologic}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8000}
+      SESSION_DAYS: ${SESSION_DAYS:-90}
+      TOTP_ISSUER: ${TOTP_ISSUER:-Психолоджик}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8000}:80'
+
+volumes:
+  pgdata:
