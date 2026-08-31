@@ -23,6 +23,9 @@
   })
 
   $effect(() => {
+    // Путь читаем синхронно: иначе зависимость не отследится и переход
+    // психолога на /admin вручную останется без проверки.
+    const isAdminArea = page.url.pathname.startsWith('/admin')
     void auth.ensure().then((profile) => {
       if (!profile) {
         return goto('/login', { replaceState: true })
@@ -30,7 +33,6 @@
       if (profile.setupStep !== 'done') {
         return goto('/setup', { replaceState: true })
       }
-      const isAdminArea = page.url.pathname.startsWith('/admin')
       if (profile.role === 'ADMIN' && !isAdminArea) {
         return goto('/admin', { replaceState: true })
       }

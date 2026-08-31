@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state'
   import { Button, QrCode, Alert, Skeleton, Icon, Checkbox, Select } from '$ui'
-  import { api, errorMessage, qs } from '$lib/api'
+  import { ApiError, api, errorMessage, qs } from '$lib/api'
   import { auth } from '$lib/auth.svelte'
   import { goto } from '$app/navigation'
   import { formatDate } from '$lib/format'
@@ -37,6 +37,12 @@
         error = ''
       })
       .catch((e) => {
+        // Лист печати живёт вне оболочки кабинета, где показывается оверлей
+        // ПИН-кода. Заблокированную сессию отправляем туда, где его спросят.
+        if (e instanceof ApiError && e.isLocked) {
+          void goto('/campaigns', { replaceState: true })
+          return
+        }
         error = errorMessage(e)
       })
   })
