@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Учётные записи ────────────────────────────────────────────────────────
+// В системе только два вида учёток: администратор (заводится при первом
+// запуске) и психолог (заводится администратором). У учеников учёток нет —
+// они проходят тесты по одноразовым кодам из QR.
+
+enum AccountRole {
+  ADMIN
+  PSYCHOLOGIST
+}
+
+model Account {
+  id                 String      @id @default(cuid())
+  login              String      @unique
+  passwordHash       String
+  role               AccountRole
+  fullName           String
+  // Пока true, психолог не пускается дальше экрана смены пароля.
+  mustChangePassword Boolean     @default(true)
+  // Временный пароль показывается администратору ровно один раз при создании.
+  tempPassword       String?
+  // TOTP (Google Authenticator, Яндекс.Ключ и т.п.)
+  totpSecret         String?
+  totpEnabled        Boolean     @default(false)
+  // ПИН-код, которым психолог разблокирует уже открытую сессию.
+  pinHash            String?
+  pinIntervalMinutes Int         @default(180)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+
+  backupCodes  BackupCode[]
+  sessions     AuthSession[]
+  createdTests Test[]
+  campaigns    Campaign[]
+  notes        Note[]
+  tags         StudentTag[]
+
+  @@index([role])
+}
+
+model BackupCode {
+  id        String    @id @default(cuid())
+  accountId String
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([accountId])
+}
+
+// Долгоживущая сессия. Из системы психолог не выходит неделями, но каждые
+// pinIntervalMinutes она «залипает» и требует ПИН — lastUnlockAt.
+model AuthSession {
+  id           String    @id @default(cuid())
+  accountId    String
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  lastSeenAt   DateTime  @default(now())
+  lastUnlockAt DateTime  @default(now())
+  userAgent    String    @default("")
+  ip           String    @default("")
+  revokedAt    DateTime?
+
+  @@index([accountId])
+  @@index([expiresAt])
+}
+
+// ─── Классы и ученики ──────────────────────────────────────────────────────
+
+model SchoolClass {
+  id              String    @id @default(cuid())
+  number          Int // 1..11
+  letter          String // А..Я
+  // Плановая численность: по ней печатается пачка QR-кодов.
+  plannedSize     Int       @default(0)
+  homeroomTeacher String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  archivedAt      DateTime?
+  // Пустая строка у действующего класса, отметка времени — у сданного в архив.
+  // Так «11А» выпуска 2026 и новый «11А» спокойно живут в одной таблице,
+  // а два действующих класса с одним именем завести по-прежнему нельзя.
+  archiveKey      String    @default("")
+
+  students Student[]
+  invites  Invite[]
+  runs     TestRun[]
+
+  @@unique([number, letter, archiveKey])
+  @@index([number])
+  @@index([archivedAt])
+}
+
+// TRACKED — ученик, которого психолог завёл руками («на карандаше»).
+// AUTO    — ученик, появившийся сам при прохождении теста по QR.
+enum StudentOrigin {
+  TRACKED
+  AUTO
+}
+
+model Student {
+  id        String        @id @default(cuid())
+  classId   String
+  class     SchoolClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lastName  String
+  firstName String
+  // Нормализованное «фамилияимя» для сопоставления авто-учеников с заведёнными.
+  searchKey String
+  origin    StudentOrigin @default(AUTO)
+  birthDate DateTime?
+  comment   String        @default("")
+
+  // Похоже на дубль вот этого ученика — психолог подтверждает или отклоняет.
+  possibleDuplicateOfId String?
+  possibleDuplicateOf   Student?  @relation("Duplicates", fields: [possibleDuplicateOfId], references: [id], onDelete: SetNull)
+  duplicateCandidates   Student[] @relation("Duplicates")
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  runs  TestRun[]
+  notes Note[]
+  tags  StudentTag[]
+
+  @@index([classId, searchKey])
+  @@index([origin])
+  @@index([possibleDuplicateOfId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    Account  @relation(fields: [authorId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+}
+
+model StudentTag {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label       String
+  color       String   @default("warning")
+  createdById String
+  createdBy   Account  @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, label])
+  @@index([studentId])
+}
+
+// ─── Тесты ─────────────────────────────────────────────────────────────────
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  SCALE
+  TEXT
+}
+
+model Test {
+  id           String  @id @default(cuid())
+  title        String
+  description  String  @default("")
+  instructions String  @default("")
+  // Встроенные методики: править нельзя, можно скопировать.
+  isBuiltIn    Boolean @default(false)
+  // Стабильный ключ встроенной методики — по нему она узнаётся при обновлении.
+  builtInKey   String? @unique
+  isPublished  Boolean @default(false)
+  // Показывать ли ученику его результат сразу после прохождения.
+  showResult   Boolean @default(false)
+
+  createdById String?
+  createdBy   Account?  @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  questions       Question[]
+  interpretations Interpretation[]
+  campaigns       Campaign[]
+  runs            TestRun[]
+
+  @@index([deletedAt])
+}
+
+model Question {
+  id      String       @id @default(cuid())
+  testId  String
+  test    Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  text    String
+  order   Int
+  type    QuestionType
+  // { choices: [{ text, score }], min, max, minLabel, maxLabel }
+  options Json         @default("{}")
+
+  @@index([testId])
+}
+
+// Диапазон баллов → уровень. label идёт в графики, text — в карточку ученика.
+model Interpretation {
+  id       String @id @default(cuid())
+  testId   String
+  test     Test   @relation(fields: [testId], references: [id], onDelete: Cascade)
+  minScore Int
+  maxScore Int
+  label    String
+  text     String @default("")
+  color    String @default("info")
+  order    Int    @default(0)
+
+  @@index([testId])
+}
+
+// ─── Выдача тестов: кампания = пачка напечатанных QR ───────────────────────
+
+model Campaign {
+  id          String    @id @default(cuid())
+  title       String
+  testId      String
+  test        Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   Account   @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  closedAt    DateTime?
+
+  invites Invite[]
+  runs    TestRun[]
+
+  @@index([testId])
+}
+
+enum InviteStatus {
+  ISSUED
+  USED
+  REVOKED
+}
+
+model Invite {
+  id         String       @id @default(cuid())
+  // Код из QR. Короткий, без похожих символов, регистронезависимый.
+  code       String       @unique
+  campaignId String
+  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  classId    String
+  class      SchoolClass  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  status     InviteStatus @default(ISSUED)
+  // Порядковый номер внутри класса — чтобы печатать «8Б · 12».
+  seq        Int
+  issuedAt   DateTime     @default(now())
+  usedAt     DateTime?
+  run        TestRun?
+
+  @@index([campaignId, classId])
+  @@index([status])
+}
+
+// ─── Прохождения ───────────────────────────────────────────────────────────
+
+model TestRun {
+  id         String  @id @default(cuid())
+  testId     String
+  test       Test    @relation(fields: [testId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // Класс на момент прохождения — снимок, чтобы перевод в 9-й не переписал историю.
+  classId    String
+  class      SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  inviteId   String?   @unique
+  invite     Invite?   @relation(fields: [inviteId], references: [id], onDelete: SetNull)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  score               Int?
+  maxScore            Int?
+  interpretationLabel String?
+  interpretationText  String?
+  // [{ questionId, questionText, type, answerText, score }]
+  answers             Json      @default("[]")
+
+  @@index([testId])
+  @@index([studentId])
+  @@index([classId])
+  @@index([completedAt])
+}
