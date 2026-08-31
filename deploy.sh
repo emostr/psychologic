@@ -160,22 +160,33 @@ check_ports() {
 	done
 }
 
+# Имя compose-проекта, под которым поднимается наш стек.
+compose_project() {
+	basename "$APP_DIR" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-'
+}
+
+# Проект контейнера, который сейчас публикует порт приложения.
+# Пусто — порт свободен либо занят процессом вне Docker.
+port_owner_project() {
+	local holder
+	holder=$(docker ps --filter "publish=$HTTP_PORT" --format '{{.ID}}' 2>/dev/null | head -n1 || true)
+	[[ -z $holder ]] && return 0
+	docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$holder" 2>/dev/null || true
+}
+
 # Порт приложения не должен быть занят посторонним: иначе Caddy отправит наш
 # домен в чужое приложение, а проверки увидят чей-то честный ответ 200.
 check_app_port() {
-	local holder project ours
-	holder=$(docker ps --filter "publish=$HTTP_PORT" --format '{{.ID}}' 2>/dev/null | head -n1 || true)
-	[[ -z $holder ]] && return 0
+	local project
+	project=$(port_owner_project)
+	[[ -z $project ]] && return 0
 
-	project=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$holder" 2>/dev/null || true)
-	ours=$(basename "$APP_DIR" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
-
-	if [[ -n $project && $project == "$ours" ]]; then
+	if [[ $project == "$(compose_project)" ]]; then
 		info "порт $HTTP_PORT держит текущий стек — это обновление"
 		return 0
 	fi
 
-	die "порт $HTTP_PORT уже занят контейнером другого проекта: ${project:-неизвестный}
+	die "порт $HTTP_PORT уже занят контейнером другого проекта: $project
     На сервере, похоже, уже работает другая платформа. Укажите в $CONFIG_FILE
     свободный HTTP_PORT (например, $((HTTP_PORT + 10))) и запустите скрипт снова.
     Иначе Caddy для домена $DOMAIN будет проксировать запросы в чужое приложение."
@@ -393,17 +404,32 @@ wait_for_app() {
 	done
 	[[ $code == 200 ]] || { cd "$APP_DIR" && docker compose ps; die "приложение не поднялось за 2 минуты — смотрите: cd $APP_DIR && docker compose logs"; }
 
+	# Кто на самом деле держит порт, решаем по метке compose-проекта: это
+	# надёжнее, чем гадать по телу ответа. Тело нужно лишь тогда, когда порт
+	# держит процесс вне Docker и метки взять неоткуда.
+	local project
+	project=$(port_owner_project)
+	if [[ -n $project && $project != "$(compose_project)" ]]; then
+		die "порт $HTTP_PORT держит контейнер другого проекта: $project
+    Caddy отправит домен $DOMAIN в чужое приложение. Укажите свободный
+    HTTP_PORT в $CONFIG_FILE и запустите скрипт снова."
+	fi
+
 	local body
 	for _ in $(seq 1 30); do
 		body=$(curl -fsS --max-time 5 "http://$host:$HTTP_PORT/api/health" 2>/dev/null || true)
-		if [[ $body == *'"app":"psychologic"'* ]]; then
+		# Метка app появилась не сразу: сборки постарше отдают health без неё,
+		# и это по-прежнему мы. Признаём и такой ответ.
+		if [[ $body == *'"app":"psychologic"'* || $body == *'"database"'* ]]; then
 			ok "API отвечает и видит базу"
+			[[ $body == *'"app":"psychologic"'* ]] \
+				|| info "health без метки app — на сервере сборка постарше, обновите исходники"
 			return 0
 		fi
-		if [[ -n $body ]]; then
-			die "на порту $HTTP_PORT отвечает не «Психолоджик», а другое приложение:
+		if [[ -n $body && -z $project ]]; then
+			die "на порту $HTTP_PORT отвечает не «Психолоджик»:
     $body
-    Скорее всего, порт занят соседней платформой. Укажите свободный HTTP_PORT
+    Порт занят посторонним процессом. Укажите свободный HTTP_PORT
     в $CONFIG_FILE и запустите скрипт снова."
 		fi
 		sleep 2
