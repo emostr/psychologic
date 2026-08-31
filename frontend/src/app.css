@@ -272,6 +272,20 @@
   padding: 1rem;
 }
 
+/*
+  Пока уведомление уезжает, его контейнер ещё висит на весь экран. В WebKit он
+  успевает перехватить клики — интерфейс на секунду становится «мёртвым».
+  Закрывающемуся контейнеру события мыши не нужны.
+*/
+.swal2-container.swal2-backdrop-hide,
+.swal2-container.swal2-noanimation {
+  pointer-events: none;
+}
+.swal2-container.swal2-backdrop-hide .swal2-popup,
+.swal2-container.swal2-noanimation .swal2-popup {
+  pointer-events: auto;
+}
+
 .swal2-popup {
   background: var(--ng-surface) !important;
   color: var(--ng-ink) !important;

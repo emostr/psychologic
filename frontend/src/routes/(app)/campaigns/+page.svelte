@@ -216,7 +216,7 @@
   subtitle="Выберите тест и классы — платформа выпустит одноразовые коды и подготовит лист для печати"
 >
   {#snippet actions()}
-    <Button icon="qr" onclick={openCreate} disabled={!publishedTests.length || !activeClasses.length}>
+    <Button icon="qr" onclick={() => openCreate()} disabled={!publishedTests.length || !activeClasses.length}>
       Новая выдача
     </Button>
   {/snippet}
@@ -244,7 +244,7 @@
       description="Одна выдача — это пачка одноразовых QR-кодов на выбранные классы. Ученик сканирует код, вписывает фамилию и имя и сразу попадает в тест. Логины и пароли не нужны."
     >
       {#snippet actions()}
-        <Button icon="qr" onclick={openCreate} disabled={!publishedTests.length || !activeClasses.length}>
+        <Button icon="qr" onclick={() => openCreate()} disabled={!publishedTests.length || !activeClasses.length}>
           Создать выдачу
         </Button>
       {/snippet}
