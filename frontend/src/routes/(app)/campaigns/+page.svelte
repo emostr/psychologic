@@ -46,11 +46,12 @@
   })
 
   // Переход «Выдать классам» из карточки теста подставляет методику сразу.
+  let autoOpened = false
   $effect(() => {
     const testId = page.url.searchParams.get('testId')
-    if (testId && tests.length) {
-      form.testId = testId
-      createOpen = true
+    if (testId && tests.length && classes.length && !autoOpened) {
+      autoOpened = true
+      openCreate(testId)
     }
   })
 
@@ -65,6 +66,9 @@
       campaigns = campaignRows
       classes = classRows
       tests = testRows
+      if (createOpen) {
+        resetSelection()
+      }
     } catch (e) {
       notify.error('Не удалось загрузить выдачи', { text: errorMessage(e) })
     } finally {
@@ -72,9 +76,18 @@
     }
   }
 
-  function openCreate() {
-    form = { testId: publishedTests[0]?.id ?? '', title: '', spare: 2, expiresAt: '' }
-    selected = {}
+  /**
+   * Отметки классов заводим сразу для всех: привязать bind:checked к
+   * отсутствующему ключу нельзя — у пропса есть значение по умолчанию,
+   * и Svelte на undefined выбрасывает props_invalid_value.
+   */
+  function resetSelection() {
+    selected = Object.fromEntries(activeClasses.map((c) => [c.id, false]))
+  }
+
+  function openCreate(testId?: string) {
+    form = { testId: testId ?? publishedTests[0]?.id ?? '', title: '', spare: 2, expiresAt: '' }
+    resetSelection()
     createOpen = true
   }
 
