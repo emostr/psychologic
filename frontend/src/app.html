@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru" data-theme="dark" data-accent="teal">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2300B294'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%230a0a0a'/%3E%3C/svg%3E"
+    />
+    <link rel="preload" href="/fonts/open-sans-normal-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/open-sans-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <script>
+      // Тему выставляем до первой отрисовки — иначе тёмный интерфейс моргнёт белым.
+      try {
+        const t = localStorage.getItem('ng-theme')
+        const a = localStorage.getItem('ng-accent')
+        if (t) document.documentElement.setAttribute('data-theme', t)
+        if (a) document.documentElement.setAttribute('data-accent', a)
+      } catch (e) {}
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>
