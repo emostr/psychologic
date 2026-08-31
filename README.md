@@ -167,4 +167,4 @@ Campaign ──< Invite            выдача = пачка одноразов�
 
 ## Лицензия
 
-MIT
+Apache 2.0 — см. файл LICENSE.
