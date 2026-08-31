@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.svelte-kit/
+.env
+deploy.conf
+backups/
+*.tsbuildinfo
+.DS_Store
