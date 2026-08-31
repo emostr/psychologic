@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import Icon from './Icon.svelte'
+  import { portal } from './portal'
 
   type Size = 'sm' | 'md' | 'lg' | 'xl' | 'full'
 
@@ -65,7 +66,7 @@
 <svelte:window {onkeydown} />
 
 {#if open}
-  <div class="fixed inset-0 z-100 flex items-start justify-center p-4 sm:p-8 overflow-y-auto">
+  <div use:portal class="fixed inset-0 z-100 flex items-start justify-center p-4 sm:p-8 overflow-y-auto">
     <button
       type="button"
       aria-label="Закрыть"

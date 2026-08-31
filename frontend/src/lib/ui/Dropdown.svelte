@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import Icon from './Icon.svelte'
+  import { portal } from './portal'
 
   interface Props {
     align?: 'left' | 'right'
@@ -33,25 +34,12 @@
     pos = { top: flip ? rect.top - gap - menuHeight : rect.bottom + gap, left, origin: flip ? 'bottom' : 'top' }
   }
 
-  async function toggle() {
+  function toggle() {
     open = !open
-    if (open) {
-      await Promise.resolve()
-      place()
-      requestAnimationFrame(place)
-    }
   }
 
   function close() {
     open = false
-  }
-
-  function onDocClick(event: MouseEvent) {
-    const target = event.target as Node | null
-    if (target && (triggerEl?.contains(target) || menuEl?.contains(target))) {
-      return
-    }
-    close()
   }
 
   function onKey(event: KeyboardEvent) {
@@ -59,31 +47,57 @@
       close()
     }
   }
+
+  // Позиционируем после того, как меню появилось в DOM и получило высоту.
+  $effect(() => {
+    if (!open || !menuEl) {
+      return
+    }
+    place()
+    const frame = requestAnimationFrame(place)
+    return () => cancelAnimationFrame(frame)
+  })
 </script>
 
-<svelte:document onclick={onDocClick} onkeydown={onKey} />
-<svelte:window onresize={close} onscroll={close} />
+<svelte:window onkeydown={onKey} onresize={close} onscroll={close} />
 
-<div bind:this={triggerEl} class="inline-block">
-  <div
-    role="button"
-    tabindex="0"
-    onclick={toggle}
-    onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
-  >
-    {#if trigger}
-      {@render trigger({ open })}
-    {:else}
-      <span class="p-2 text-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer inline-flex">
-        <Icon name="more" size={18} />
-      </span>
-    {/if}
-  </div>
-</div>
+<button
+  bind:this={triggerEl}
+  type="button"
+  class="inline-block cursor-pointer text-left"
+  aria-haspopup="menu"
+  aria-expanded={open}
+  onclick={toggle}
+>
+  {#if trigger}
+    {@render trigger({ open })}
+  {:else}
+    <span class="p-2 text-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer inline-flex">
+      <Icon name="more" size={18} />
+    </span>
+  {/if}
+</button>
 
 {#if open}
+  <!--
+    Прозрачная подложка вместо слушателя на document. Клик мимо меню
+    гарантированно закрывает его в любом браузере, и порядок всплытия событий
+    больше ни на что не влияет: раньше клик, открывший меню, доходил до
+    document и мог тут же его закрыть. Подложка накрывает и сам триггер,
+    поэтому повторный клик по нему просто закрывает меню.
+  -->
+  <button
+    use:portal
+    type="button"
+    aria-label="Закрыть меню"
+    class="fixed inset-0 z-[110] cursor-default"
+    onclick={close}
+  ></button>
   <div
+    use:portal
     bind:this={menuEl}
+    role="menu"
+    tabindex="-1"
     class="fixed z-[120] bg-surface border border-line shadow-2xl py-1 ng-enter"
     style="top: {pos.top}px; left: {pos.left}px; width: {width}px; transform-origin: {pos.origin}"
   >
