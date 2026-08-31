@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { HTMLInputAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
 
   interface Props {
@@ -16,7 +17,7 @@
     min?: number
     max?: number
     inputmode?: 'text' | 'numeric' | 'decimal' | 'tel' | 'search' | 'email' | 'url'
-    autocomplete?: string
+    autocomplete?: HTMLInputAttributes['autocomplete']
     class?: string
     oninput?: (event: Event) => void
     onkeydown?: (event: KeyboardEvent) => void

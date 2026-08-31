@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { goto } from '$app/navigation'
   import {
     Card,
@@ -16,7 +17,7 @@
   import { api, errorMessage } from '$lib/api'
   import { notify } from '$lib/notify'
   import { QUESTION_TYPES, TONES } from '$lib/catalog'
-  import type { QuestionType, TestView, Tone } from '$lib/types'
+  import type { QuestionType, TestView } from '$lib/types'
 
   interface DraftChoice {
     text: string
@@ -53,10 +54,13 @@
   let seq = 0
   const nextKey = () => (seq += 1)
 
-  let title = $state(source?.title ?? '')
-  let description = $state(source?.description ?? '')
-  let instructions = $state(source?.instructions ?? '')
-  let showResult = $state(source?.showResult ?? false)
+  // Начальные значения снимаем один раз: дальше форма живёт своей жизнью.
+  const initial = untrack(() => source)
+
+  let title = $state(initial?.title ?? '')
+  let description = $state(initial?.description ?? '')
+  let instructions = $state(initial?.instructions ?? '')
+  let showResult = $state(initial?.showResult ?? false)
   let saving = $state(false)
   let presetOpen = $state(false)
   let presetTarget = $state<number | null>(null)
@@ -82,8 +86,8 @@
   }
 
   let questions = $state<DraftQuestion[]>(
-    source?.questions.length
-      ? source.questions.map((q) => ({
+    initial?.questions.length
+      ? initial.questions.map((q) => ({
           key: nextKey(),
           text: q.text,
           type: q.type,
@@ -98,8 +102,8 @@
   )
 
   let levels = $state<DraftLevel[]>(
-    source?.interpretations.length
-      ? source.interpretations.map((i) => ({
+    initial?.interpretations.length
+      ? initial.interpretations.map((i) => ({
           key: nextKey(),
           minScore: i.minScore,
           maxScore: i.maxScore,

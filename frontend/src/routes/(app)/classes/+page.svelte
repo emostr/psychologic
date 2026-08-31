@@ -12,13 +12,11 @@
     EmptyState,
     Dropdown,
     DropdownItem,
-    Progress,
     Icon,
   } from '$ui'
   import { api, errorMessage, qs } from '$lib/api'
   import { notify } from '$lib/notify'
   import { CLASS_LETTERS, CLASS_NUMBERS } from '$lib/catalog'
-  import { countLabel } from '$lib/format'
   import type { ClassRow } from '$lib/types'
 
   let rows = $state<ClassRow[]>([])

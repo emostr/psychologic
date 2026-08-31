@@ -56,12 +56,12 @@
   <PageHeader title={test.title} subtitle={test.description}>
     {#snippet actions()}
       <Button variant="ghost" icon="arrowLeft" href="/tests">К списку</Button>
-      {#if !test.isBuiltIn}
-        <Button variant="secondary" icon="edit" href="/tests/{test.id}/edit">Редактировать</Button>
+      {#if !test?.isBuiltIn}
+        <Button variant="secondary" icon="edit" href="/tests/{test?.id}/edit">Редактировать</Button>
       {/if}
       <Button variant="secondary" icon="copy" onclick={duplicate}>Копия</Button>
-      {#if test.isPublished}
-        <Button icon="qr" href="/campaigns?testId={test.id}">Выдать классам</Button>
+      {#if test?.isPublished}
+        <Button icon="qr" href="/campaigns?testId={test?.id}">Выдать классам</Button>
       {:else}
         <Button icon="send" onclick={togglePublish}>Опубликовать</Button>
       {/if}
