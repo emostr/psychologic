@@ -1,0 +1,85 @@
+:80 {
+	root * /usr/share/caddy
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+
+	handle /api/* {
+		reverse_proxy backend:3000 {
+			@unauthorized status 401
+			handle_response @unauthorized {
+				@unauthorized_page header Accept *text/html*
+				handle @unauthorized_page {
+					rewrite * /errors/401.html
+					file_server {
+						status 401
+					}
+				}
+				handle {
+					copy_response
+				}
+			}
+
+			@denied status 403
+			handle_response @denied {
+				@denied_page header Accept *text/html*
+				handle @denied_page {
+					rewrite * /errors/403.html
+					file_server {
+						status 403
+					}
+				}
+				handle {
+					copy_response
+				}
+			}
+
+			@failed status 500
+			handle_response @failed {
+				@failed_page header Accept *text/html*
+				handle @failed_page {
+					rewrite * /errors/500.html
+					file_server {
+						status 500
+					}
+				}
+				handle {
+					copy_response
+				}
+			}
+		}
+	}
+
+	@static path *.js *.css *.svg *.png *.jpg *.jpeg *.gif *.webp *.woff *.woff2
+	header @static Cache-Control "public, max-age=2592000, immutable"
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle_errors {
+		@page expression {err.status_code} in [401, 403, 502]
+		handle @page {
+			rewrite * /errors/{err.status_code}.html
+			file_server {
+				status {err.status_code}
+			}
+		}
+
+		@server_error expression {err.status_code} >= 500
+		handle @server_error {
+			rewrite * /errors/500.html
+			file_server {
+				status {err.status_code}
+			}
+		}
+
+		handle {
+			respond "{err.status_code} {err.status_text}" {err.status_code}
+		}
+	}
+}
