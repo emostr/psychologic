@@ -17,11 +17,13 @@ export function transliterate(input: string): string {
   return out;
 }
 
-/** Логин психолога: «Наталья Наземнова» → naznemnova.n (транслит фамилии + инициал). */
+/** Логин психолога: «Наземнова Наталья» → nazemnova.n (транслит фамилии + инициал). */
 export function buildLoginBase(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const last = transliterate(parts[0] ?? '');
-  const initial = transliterate(parts[1] ?? '').charAt(0);
+  // Транслитерируем именно первую букву имени, а не первую букву транслита:
+  // «Юлия» должна дать «yu», а не «y».
+  const initial = transliterate((parts[1] ?? '').charAt(0));
   const base = initial ? `${last}.${initial}` : last;
   return base.length >= 3 ? base : 'psycholog';
 }

@@ -44,7 +44,8 @@
   const suggestedLogin = $derived.by(() => {
     const parts = form.fullName.trim().split(/\s+/).filter(Boolean)
     const last = translit(parts[0] ?? '')
-    const initial = translit(parts[1] ?? '').charAt(0)
+    // Как и на сервере: транслитерируем первую букву имени целиком («Ю» → «yu»).
+    const initial = translit((parts[1] ?? '').charAt(0))
     const base = initial ? `${last}.${initial}` : last
     return base.length >= 3 ? base : ''
   })
