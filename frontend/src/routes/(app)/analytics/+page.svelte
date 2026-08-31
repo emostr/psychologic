@@ -16,7 +16,7 @@
   } from '$ui'
   import { api, errorMessage, qs } from '$lib/api'
   import { notify } from '$lib/notify'
-  import { toneColor, cssVar, theme } from '$lib/theme.svelte'
+  import { toneColor, cssVar, themeKey } from '$lib/theme.svelte'
   import { monthLabel, formatDateTime, countLabel } from '$lib/format'
   import { ORIGIN_LABELS } from '$lib/catalog'
   import type { ClassReport, ScopeStats, TestReport, TestSummary } from '$lib/types'
@@ -265,7 +265,7 @@
   }
 
   // Графики перечитывают палитру при смене темы.
-  const revision = $derived(theme.revision)
+  const revision = $derived(themeKey())
 </script>
 
 <svelte:head><title>Аналитика · Психолоджик</title></svelte:head>

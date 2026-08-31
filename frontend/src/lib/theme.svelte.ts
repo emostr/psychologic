@@ -32,9 +32,12 @@ function stored(key: string, fallback: string): string {
 class ThemeStore {
   theme = $state(stored(THEME_KEY, 'dark'))
   accent = $state(stored(ACCENT_KEY, 'teal'))
-  /** Растёт при каждой смене темы — по нему графики перерисовываются. */
-  revision = $state(0)
 
+  /**
+   * Здесь нельзя трогать никакое $state: apply() вызывается из $effect,
+   * и запись в состояние, которое эффект же и читает, отправила бы его
+   * в бесконечный цикл. Меняем только атрибуты в DOM.
+   */
   private apply(): void {
     if (!browser) {
       return
@@ -42,7 +45,6 @@ class ThemeStore {
     const el = document.documentElement
     el.setAttribute('data-theme', this.theme)
     el.setAttribute('data-accent', this.accent)
-    this.revision += 1
   }
 
   private persist(key: string, value: string): void {
@@ -99,4 +101,9 @@ const TONE_VARS: Record<string, string> = {
 /** Цвет уровня интерпретации в виде hex — для Chart.js. */
 export function toneColor(tone: string): string {
   return cssVar(TONE_VARS[tone] ?? '--ng-muted')
+}
+
+/** Ключ текущего оформления: по его смене графики перерисовываются. */
+export function themeKey(): string {
+  return `${theme.theme}:${theme.accent}`
 }

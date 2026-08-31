@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Chart, registerables, type ChartConfiguration } from 'chart.js'
-  import { theme, cssVar } from '$lib/theme.svelte'
+  import { themeKey, cssVar } from '$lib/theme.svelte'
 
   Chart.register(...registerables)
 
@@ -34,8 +34,8 @@
   }
 
   $effect(() => {
-    // Перечитываем revision — при смене темы или акцента график перерисуется.
-    void theme.revision
+    // Читаем тему и акцент: при их смене график перерисуется новой палитрой.
+    void themeKey()
     void config
     build()
     return () => {
