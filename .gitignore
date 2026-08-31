@@ -7,3 +7,4 @@ deploy.conf
 backups/
 *.tsbuildinfo
 .DS_Store
+reference/
