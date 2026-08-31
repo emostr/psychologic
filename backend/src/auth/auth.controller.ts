@@ -27,11 +27,22 @@ export class AuthController {
     return { ip: req.ip ?? '', userAgent: String(req.headers['user-agent'] ?? '').slice(0, 250) };
   }
 
+  /**
+   * Флаг Secure выставляем по схеме публичного адреса, а не по NODE_ENV.
+   * Иначе платформа, поднятая по http (локальный docker compose), выдаёт
+   * Secure-cookie, которую Safari молча выбрасывает: вход проходит, а все
+   * последующие запросы получают 401. Chrome делает исключение для localhost,
+   * Safari — нет, поэтому баг видно только в нём.
+   */
+  private secureCookies(): boolean {
+    return (this.config.get<string>('PUBLIC_URL') ?? '').startsWith('https://');
+  }
+
   private setCookie(reply: FastifyReply, token: string, expiresAt: Date): void {
     reply.setCookie(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: this.config.get('NODE_ENV') === 'production',
+      secure: this.secureCookies(),
       path: '/',
       expires: expiresAt,
     });
