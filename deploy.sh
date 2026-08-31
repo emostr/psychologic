@@ -160,6 +160,27 @@ check_ports() {
 	done
 }
 
+# Порт приложения не должен быть занят посторонним: иначе Caddy отправит наш
+# домен в чужое приложение, а проверки увидят чей-то честный ответ 200.
+check_app_port() {
+	local holder project ours
+	holder=$(docker ps --filter "publish=$HTTP_PORT" --format '{{.ID}}' 2>/dev/null | head -n1 || true)
+	[[ -z $holder ]] && return 0
+
+	project=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$holder" 2>/dev/null || true)
+	ours=$(basename "$APP_DIR" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+
+	if [[ -n $project && $project == "$ours" ]]; then
+		info "порт $HTTP_PORT держит текущий стек — это обновление"
+		return 0
+	fi
+
+	die "порт $HTTP_PORT уже занят контейнером другого проекта: ${project:-неизвестный}
+    На сервере, похоже, уже работает другая платформа. Укажите в $CONFIG_FILE
+    свободный HTTP_PORT (например, $((HTTP_PORT + 10))) и запустите скрипт снова.
+    Иначе Caddy для домена $DOMAIN будет проксировать запросы в чужое приложение."
+}
+
 apt_install() {
 	local missing=()
 	local pkg
@@ -372,11 +393,18 @@ wait_for_app() {
 	done
 	[[ $code == 200 ]] || { cd "$APP_DIR" && docker compose ps; die "приложение не поднялось за 2 минуты — смотрите: cd $APP_DIR && docker compose logs"; }
 
+	local body
 	for _ in $(seq 1 30); do
-		code=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 5 "http://$host:$HTTP_PORT/api/health" 2>/dev/null || true)
-		if [[ $code == 200 ]]; then
+		body=$(curl -fsS --max-time 5 "http://$host:$HTTP_PORT/api/health" 2>/dev/null || true)
+		if [[ $body == *'"app":"psychologic"'* ]]; then
 			ok "API отвечает и видит базу"
 			return 0
+		fi
+		if [[ -n $body ]]; then
+			die "на порту $HTTP_PORT отвечает не «Психолоджик», а другое приложение:
+    $body
+    Скорее всего, порт занят соседней платформой. Укажите свободный HTTP_PORT
+    в $CONFIG_FILE и запустите скрипт снова."
 		fi
 		sleep 2
 	done
@@ -525,7 +553,7 @@ main() {
 		detect_os
 		check_dns
 		[[ $EUID -eq 0 ]] && check_ports
-		if command -v docker >/dev/null; then ok "docker: $(docker --version)"; else info "docker будет установлен"; fi
+		if command -v docker >/dev/null; then ok "docker: $(docker --version)"; check_app_port; else info "docker будет установлен"; fi
 		if command -v caddy >/dev/null; then ok "caddy: $(caddy version | head -n1)"; else info "caddy будет установлен"; fi
 		printf '\n%sПроверка пройдена, изменений не вносилось.%s\n\n' "$C_OK" "$C_RESET"
 		exit 0
@@ -546,6 +574,7 @@ main() {
 		command -v caddy >/dev/null || die "Caddy не установлен"
 	fi
 
+	check_app_port
 	disable_nginx
 	sync_sources
 	mkdir -p "$BACKUP_DIR"

@@ -15,6 +15,13 @@ export class HealthController {
     } catch {
       database = 'down';
     }
-    return { status: database === 'ok' ? 'ok' : 'degraded', database, time: new Date().toISOString() };
+    // Поле app — метка платформы: по ней deploy.sh убеждается, что на порту
+    // отвечаем именно мы, а не чужое приложение, занявшее его раньше.
+    return {
+      app: 'psychologic',
+      status: database === 'ok' ? 'ok' : 'degraded',
+      database,
+      time: new Date().toISOString(),
+    };
   }
 }
