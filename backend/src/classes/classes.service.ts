@@ -105,9 +105,16 @@ export class ClassesService {
   }
 
   /**
-   * Перевод класса (7Б → 8Б). Если действующего 8Б нет — просто меняем табличку.
-   * Если есть — переносим в него учеников, а исходный класс уходит в архив.
-   * История прохождений привязана к классу-снимку и не переписывается.
+   * Перевод класса (7Б → 8Б).
+   *
+   * Если по классу уже есть прохождения, менять его табличку нельзя: результаты
+   * ссылаются на запись класса, и переименование задним числом превратило бы
+   * прошлогодний срез 7Б в срез 8Б. Поэтому заводим отдельную запись под новый
+   * учебный год и переносим в неё учеников, а прежнюю отправляем в архив —
+   * история остаётся при своём классе.
+   *
+   * Класс без прохождений — это ещё не история, а опечатка при создании,
+   * такой просто переименовывается на месте.
    */
   async transfer(id: string, number: number, letter: string): Promise<ClassRow> {
     const source = await this.requireClass(id);
@@ -118,11 +125,22 @@ export class ClassesService {
       throw new BadRequestException('Класс уже так называется');
     }
 
-    const target = await this.findActive(number, letter);
+    let target = await this.findActive(number, letter);
 
     if (!target) {
-      await this.prisma.schoolClass.update({ where: { id }, data: { number, letter } });
-      return this.one(id);
+      const runs = await this.prisma.testRun.count({ where: { classId: id } });
+      if (runs === 0) {
+        await this.prisma.schoolClass.update({ where: { id }, data: { number, letter } });
+        return this.one(id);
+      }
+      target = await this.prisma.schoolClass.create({
+        data: {
+          number,
+          letter,
+          plannedSize: source.plannedSize,
+          homeroomTeacher: source.homeroomTeacher,
+        },
+      });
     }
 
     await this.prisma.$transaction([
